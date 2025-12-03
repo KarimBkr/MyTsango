@@ -1,0 +1,40 @@
+stages:
+  - lint
+  - test
+  - build
+
+variables:
+  # Utiliser la dernière version de Node LTS pour les jobs Node.js
+  NODE_IMAGE: "node:18"
+
+# Job de Lint (analyse statique du code)
+lint:
+  stage: lint
+  image: $NODE_IMAGE
+  script:
+    - echo "Installing dependencies for lint..."
+    - npm ci --quiet
+    - echo "Running ESLint..."
+    - npx eslint apps/mobile/ services/api/ --max-warnings=0
+
+# Job de Test (à remplir plus tard quand tests disponibles)
+test:
+  stage: test
+  image: $NODE_IMAGE
+  script:
+    - echo "Running tests (placeholder)"
+    - npm ci --quiet
+    - npm test || echo "No tests yet"
+
+# Job de Build (vérifier que le build passe)
+build:
+  stage: build
+  image: docker:24.0.2
+  services:
+    - docker:24.0.2-dind   # Docker in Docker, pour pouvoir builder des images dans le job CI
+  variables:
+    DOCKER_DRIVER: overlay2
+  script:
+    - echo "Building Docker images for api and mobile..."
+    - docker build -f infra/backend/Dockerfile -t myrepo/api:latest .
+    - docker build -f infra/mobile/Dockerfile -t myrepo/mobile:latest .

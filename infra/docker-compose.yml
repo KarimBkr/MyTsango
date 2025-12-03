@@ -1,0 +1,163 @@
+version: '3.9'
+
+services:
+  # Service backend NestJS API
+  api:
+    build:
+      context: ..                        # Contexte de build: racine du projet (monorepo)
+      dockerfile: infra/backend/Dockerfile
+    container_name: api
+    env_file:
+      - ../.env.backend                  # Charge les variables d'environnement du backend
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - STRIPE_API_KEY=${STRIPE_API_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - SUMSUB_APP_TOKEN=${SUMSUB_APP_TOKEN}
+      - SUMSUB_SECRET_KEY=${SUMSUB_SECRET_KEY}
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - FCM_SERVER_KEY=${FCM_SERVER_KEY}
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
+      - TWILIO_FROM_NUMBER=${TWILIO_FROM_NUMBER}
+      - APP_BASE_URL=${APP_BASE_URL}
+      - WEBHOOK_BASE_URL=${WEBHOOK_BASE_URL}
+    ports:
+      - "3000:3000"            # API disponible sur localhost:3000
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    networks:
+      - default
+
+  # Service mobile (Expo)
+  mobile:
+    build:
+      context: ..                         # On utilise le Dockerfile de infra/mobile pour builder l'image Expo
+      dockerfile: infra/mobile/Dockerfile
+    container_name: mobile
+    depends_on:
+      - api
+    ports:
+      - "19000:19000"         # Port Metro Bundler (expo)
+      - "19001:19001"         # Port éventuellement utilisé par expo (manifest)
+      - "19002:19002"         # Port Expo DevTools (interface web)
+    networks:
+      - default
+
+  # Base de données PostgreSQL
+  postgres:
+    image: postgres:13-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=app       # nom de la base de données par défaut
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"           # Base de données accessible sur localhost:5432
+    networks:
+      - default
+
+  # Cache/Queue Redis
+  redis:
+    image: redis:6-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"           # Redis accessible sur localhost:6379
+    networks:
+      - default
+
+  # Stockage d'objets MinIO (S3-like)
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"           # API S3 (MinIO) sur localhost:9000
+      - "9001:9001"           # Console web MinIO sur localhost:9001
+    networks:
+      - default
+
+  # Stripe CLI (écoute des webhooks Stripe et forward vers l'API)
+  stripe:
+    image: stripe/stripe-cli:latest
+    container_name: stripe
+    command: ["listen", "--api-key", "${STRIPE_API_KEY:-sk_test_placeholder}", "--forward-to", "api:3000/webhooks/stripe"]
+    depends_on:
+      - api
+    networks:
+      - default
+
+  # Ngrok (tunnel public vers l'API)
+  ngrok:
+    image: ngrok/ngrok:latest
+    container_name: ngrok
+    command: "http api:3000"
+    environment:
+      - NGROK_AUTHTOKEN=${NGROK_AUTHTOKEN:-}
+    ports:
+      - "4040:4040"           # Interface web ngrok (http://localhost:4040)
+    depends_on:
+      - api
+    networks:
+      - default
+
+  # Prometheus (monitoring - collecte des métriques de l'API)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    ports:
+      - "9090:9090"           # UI Prometheus sur localhost:9090
+    depends_on:
+      - api
+    networks:
+      - default
+
+  # Grafana (visualisation des métriques)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    ports:
+      - "3001:3000"           # UI Grafana sur localhost:3001
+    depends_on:
+      - prometheus
+    networks:
+      - default
+
+  # pgAdmin (interface web d'administration PostgreSQL)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"             # UI pgAdmin sur localhost:5050
+    depends_on:
+      - postgres
+    networks:
+      - default
+
+networks:
+  default:
+
+volumes:
+  postgres-data:
+  minio-data:

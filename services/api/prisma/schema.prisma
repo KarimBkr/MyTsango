@@ -1,0 +1,36 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Modèle User: représente un utilisateur de l'application
+model User {
+  id             String   @id @default(uuid()) @db.Uuid
+  email          String   @unique
+  passwordHash   String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relation vers KycVerification (un utilisateur peut avoir une vérification KYC)
+  kycVerification KycVerification?
+
+  @@map("users") // optionnel: nom de table en base
+}
+
+// Modèle KycVerification: représente une demande de vérification KYC pour un utilisateur
+model KycVerification {
+  id        String   @id @default(uuid()) @db.Uuid
+  status    String   @default("PENDING") // ex: "PENDING", "APPROVED", "REJECTED"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relation avec User
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @unique @db.Uuid
+
+  @@map("kyc_verifications")
+}

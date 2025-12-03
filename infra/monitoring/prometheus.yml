@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s    # intervalle de collecte par défaut
+
+scrape_configs:
+  # Scraper les métriques de l'API NestJS
+  - job_name: "api"
+    metrics_path: "/metrics"
+    scrape_interval: 5s   # on peut scruter l'API plus fréquemment
+    static_configs:
+      - targets: ["api:3000"]
