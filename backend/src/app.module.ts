@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { KycModule } from './kyc/kyc.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
     imports: [
@@ -13,6 +14,8 @@ import { KycModule } from './kyc/kyc.module';
         PrismaModule,
         MetricsModule,
         KycModule,
+        AuthModule,  // Phase 2: Authentication module
     ],
 })
 export class AppModule { }
+

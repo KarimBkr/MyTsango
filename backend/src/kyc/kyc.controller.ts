@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Query, Body, Headers, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, Headers, Query, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { KycService } from './kyc.service';
 import { KycStartResponseDto, KycStatusResponseDto, SumsubWebhookDto } from './dto/kyc.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('KYC')
 @Controller('kyc')
@@ -9,26 +10,30 @@ export class KycController {
     constructor(private readonly kycService: KycService) { }
 
     /**
-     * Phase 1: Start KYC verification (no JWT guard)
-     * Phase 2: Add @UseGuards(JwtAuthGuard) and get userId from req.user
+     * Phase 2: Start KYC verification (protected with JWT)
      */
+    @UseGuards(JwtAuthGuard)
     @Post('start')
+    @ApiBearerAuth()
     @ApiOperation({ summary: 'Start KYC verification process' })
-    @ApiQuery({ name: 'userId', description: 'User ID (temporary for Phase 1)', required: true })
-    @ApiResponse({ status: 200, description: 'KYC verification started', type: KycStartResponseDto })
-    async startKyc(@Query('userId') userId: string): Promise<KycStartResponseDto> {
+    @ApiResponse({ status: 201, description: 'KYC verification started', type: KycStartResponseDto })
+    @ApiResponse({ status: 401, description: 'Unauthorized - JWT required' })
+    async startKyc(@Request() req: any): Promise<KycStartResponseDto> {
+        const userId = req.user.id;
         return this.kycService.startKycVerification(userId);
     }
 
     /**
-     * Phase 1: Get KYC status (no JWT guard)
-     * Phase 2: Add @UseGuards(JwtAuthGuard) and get userId from req.user
+     * Phase 2: Get KYC status (protected with JWT)
      */
+    @UseGuards(JwtAuthGuard)
     @Get('status')
+    @ApiBearerAuth()
     @ApiOperation({ summary: 'Get KYC verification status' })
-    @ApiQuery({ name: 'userId', description: 'User ID (temporary for Phase 1)', required: true })
     @ApiResponse({ status: 200, description: 'KYC status retrieved', type: KycStatusResponseDto })
-    async getKycStatus(@Query('userId') userId: string): Promise<KycStatusResponseDto> {
+    @ApiResponse({ status: 401, description: 'Unauthorized - JWT required' })
+    async getKycStatus(@Request() req: any): Promise<KycStatusResponseDto> {
+        const userId = req.user.id;
         return this.kycService.getKycStatus(userId);
     }
 
