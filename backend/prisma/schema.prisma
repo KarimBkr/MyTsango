@@ -1,0 +1,90 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// KYC Status Enum
+enum KycStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// KYC Verification Model - Phase 1
+// Phase 2: Linked to User model with bidirectional relation
+model KycVerification {
+  id            String    @id @default(uuid())
+  userId        String    // Foreign key to User
+  applicantId   String?   @unique // Sumsub applicant ID
+  status        KycStatus @default(NONE)
+  
+  // Review details from Sumsub webhook
+  reviewStatus  String?   // "init", "pending", "completed", "onHold"
+  reviewResult  Json?     // Full review result from Sumsub
+  rejectReason  String?   // Reason if rejected
+  
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  approvedAt    DateTime?
+  rejectedAt    DateTime?
+  
+  // Idempotency for webhooks
+  webhookEventId String?  @unique // To prevent duplicate webhook processing
+  
+  // Relation to User (Phase 2) - Opposite side of the relation
+  user User? @relation
+  
+  @@index([userId])
+  @@index([status])
+  @@map("kyc_verifications")
+}
+
+// User model for authentication
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String    @unique
+  password       String    // bcrypt hashed
+  role           UserRole  @default(MEMBER)
+  kycStatus      KycStatus @default(NONE)
+  kycApplicantId String?   @unique  // Link to Sumsub applicant (1-to-1 with KycVerification)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  kycVerification KycVerification? @relation(fields: [kycApplicantId], references: [applicantId])
+
+  @@index([email])
+  @@map("users")
+}
+
+// User roles enum
+enum UserRole {
+  MEMBER      // Default role for new users
+  ORGANIZER   // Promoted after KYC approval
+  ADMIN       // System administrators
+}
+
+
+// Audit Log for KYC events - Phase 1
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?
+  action      String   // "kyc_started", "kyc_approved", "kyc_rejected", "webhook_received"
+  details     Json?    // Additional context
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
