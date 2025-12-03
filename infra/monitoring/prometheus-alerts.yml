@@ -1,0 +1,91 @@
+# Prometheus Alerting Rules for MyTsango KYC Module
+# Place this file in your Prometheus configuration directory
+
+groups:
+  - name: kyc_alerts
+    interval: 30s
+    rules:
+      # Alert: High KYC failure rate
+      - alert: HighKycFailureRate
+        expr: |
+          rate(kyc_failure_total[5m]) / rate(kyc_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: kyc
+        annotations:
+          summary: "High KYC failure rate detected"
+          description: "KYC failure rate is {{ $value | humanizePercentage }} over the last 5 minutes"
+
+      # Alert: KYC processing too slow
+      - alert: KycProcessingSlow
+        expr: |
+          histogram_quantile(0.95, rate(kyc_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: kyc
+        annotations:
+          summary: "KYC processing is slow"
+          description: "95th percentile of KYC processing time is {{ $value }}s (threshold: 10s)"
+
+      # Alert: No KYC requests received
+      - alert: NoKycRequests
+        expr: |
+          rate(kyc_requests_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: info
+          component: kyc
+        annotations:
+          summary: "No KYC requests received"
+          description: "No KYC requests have been received in the last 10 minutes"
+
+      # Alert: High webhook failure rate
+      - alert: HighWebhookFailureRate
+        expr: |
+          rate(kyc_failure_total{reason="invalid_signature"}[5m]) / rate(kyc_requests_total{endpoint="webhook"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: kyc
+        annotations:
+          summary: "High webhook signature failure rate"
+          description: "{{ $value | humanizePercentage }} of webhooks are failing signature validation"
+
+      # Alert: KYC approval rate dropped
+      - alert: KycApprovalRateDropped
+        expr: |
+          rate(kyc_success_total{status="approved"}[1h]) / rate(kyc_requests_total{endpoint="start"}[1h]) < 0.5
+        for: 1h
+        labels:
+          severity: warning
+          component: kyc
+        annotations:
+          summary: "KYC approval rate dropped"
+          description: "KYC approval rate is {{ $value | humanizePercentage }} (expected > 50%)"
+
+      # Alert: Pending KYC backlog
+      - alert: KycPendingBacklog
+        expr: |
+          count(kyc_verifications{status="PENDING"}) > 100
+        for: 15m
+        labels:
+          severity: warning
+          component: kyc
+        annotations:
+          summary: "High number of pending KYC verifications"
+          description: "{{ $value }} KYC verifications are pending (threshold: 100)"
+
+      # Alert: Webhook processing errors
+      - alert: WebhookProcessingErrors
+        expr: |
+          rate(kyc_failure_total{reason="webhook_error"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          component: kyc
+        annotations:
+          summary: "Webhook processing errors detected"
+          description: "{{ $value }} webhook processing errors per second"
+

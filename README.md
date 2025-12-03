@@ -55,7 +55,7 @@ cp .env.example .env
 # Démarrer PostgreSQL (Docker)
 docker run -d \
   --name mytsango-postgres \
-  -e POSTGRES_PASSWORD=dev123 \
+  -e POSTGRES_PASSWORD=your_postgres_password \
   -e POSTGRES_DB=mytsango \
   -p 5432:5432 \
   postgres:15
