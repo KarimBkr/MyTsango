@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, RefreshControl, ActivityIndicator, Button } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { useKyc } from '../hooks/useKyc';
 import { KycStatusBadge } from '../components/KycStatusBadge';
 import { KycStatus } from '../types/kyc.types';
+import { useAuth } from '../contexts/AuthContext';
 
 type RootStackParamList = {
     Profile: undefined;
@@ -15,12 +16,13 @@ type ProfileScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Prof
 
 export const ProfileScreen: React.FC = () => {
     const navigation = useNavigation<ProfileScreenNavigationProp>();
+    const { user, logout } = useAuth();
 
-    // Phase 1: Hardcoded userId
-    // Phase 2: Get from AuthContext
-    const userId = 'test-user-123';
+    // Use authenticated user ID
+    const userId = user?.id || '';
 
     const { kycStatus, isLoadingStatus, refetch } = useKyc(userId);
+
 
     const handleVerifyIdentity = () => {
         navigation.navigate('KycWebView');
@@ -44,9 +46,19 @@ export const ProfileScreen: React.FC = () => {
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Informations</Text>
                     <View style={styles.infoRow}>
-                        <Text style={styles.label}>ID Utilisateur:</Text>
-                        <Text style={styles.value}>{userId}</Text>
+                        <Text style={styles.label}>Email:</Text>
+                        <Text style={styles.value}>{user?.email}</Text>
                     </View>
+                    <View style={styles.infoRow}>
+                        <Text style={styles.label}>Rôle:</Text>
+                        <Text style={styles.value}>{user?.role}</Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.button, { backgroundColor: '#EF4444' }]}
+                        onPress={logout}
+                    >
+                        <Text style={styles.buttonText}>Déconnexion</Text>
+                    </TouchableOpacity>
                 </View>
 
                 {/* KYC Status Section */}

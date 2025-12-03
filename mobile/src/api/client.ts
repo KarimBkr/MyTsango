@@ -1,39 +1,43 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Phase 1: Use localhost or local IP
-// Phase 2: Will use environment variable
-const API_BASE_URL = 'http://localhost:3000';
+// Use your local IP or ngrok URL
+const API_URL = process.env.API_URL || 'http://localhost:3000';
 
-const client = axios.create({
-    baseURL: API_BASE_URL,
+const apiClient = axios.create({
+    baseURL: API_URL,
     timeout: 10000,
     headers: {
         'Content-Type': 'application/json',
     },
 });
 
-// Request interceptor for logging
-client.interceptors.request.use(
-    (config) => {
-        console.log(`[API] ${config.method?.toUpperCase()} ${config.url}`);
+// Request interceptor: Add JWT token to headers
+apiClient.interceptors.request.use(
+    async (config) => {
+        const token = await AsyncStorage.getItem('auth_token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
         return config;
     },
     (error) => {
-        console.error('[API] Request error:', error);
         return Promise.reject(error);
     }
 );
 
-// Response interceptor for logging
-client.interceptors.response.use(
-    (response) => {
-        console.log(`[API] Response ${response.status}:`, response.data);
-        return response;
-    },
-    (error) => {
-        console.error('[API] Response error:', error.response?.data || error.message);
+// Response interceptor: Handle 401 Unauthorized
+apiClient.interceptors.response.use(
+    (response) => response,
+    async (error) => {
+        if (error.response?.status === 401) {
+            // Token expired or invalid - clear auth
+            await AsyncStorage.removeItem('auth_token');
+            await AsyncStorage.removeItem('auth_user');
+            // Navigation will redirect to login automatically
+        }
         return Promise.reject(error);
     }
 );
 
-export default client;
+export default apiClient;
