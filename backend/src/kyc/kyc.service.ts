@@ -1,9 +1,9 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../metrics/metrics.service';
+import { SumsubService } from './sumsub.service';
 import { KycStatus } from '@prisma/client';
 import { KycStartResponseDto, KycStatusResponseDto, SumsubWebhookDto } from './dto/kyc.dto';
-import * as crypto from 'crypto';
 
 @Injectable()
 export class KycService {
@@ -12,11 +12,11 @@ export class KycService {
     constructor(
         private readonly prisma: PrismaService,
         private readonly metrics: MetricsService,
+        private readonly sumsubService: SumsubService,
     ) { }
 
     /**
-     * Phase 1: Start KYC verification (MOCKED)
-     * Phase 2: Will call real Sumsub API
+     * Phase 2: Start KYC verification with REAL Sumsub API
      */
     async startKycVerification(userId: string): Promise<KycStartResponseDto> {
         const timer = this.metrics.kycDurationSeconds.startTimer({ operation: 'start' });
@@ -25,44 +25,76 @@ export class KycService {
         try {
             this.logger.log(`Starting KYC verification for user ${userId}`);
 
-            // Check if KYC already exists
-            let kycVerification = await this.prisma.kycVerification.findFirst({
-                where: { userId },
-            });
-
-            // Phase 1: MOCK - Generate fake applicant ID and token
-            const mockApplicantId = `mock-applicant-${Date.now()}`;
-            const mockToken = `mock-sdk-token-${crypto.randomBytes(16).toString('hex')}`;
-
-            if (!kycVerification) {
-                // Create new KYC verification record
-                kycVerification = await this.prisma.kycVerification.create({
-                    data: {
-                        userId,
-                        applicantId: mockApplicantId,
-                        status: KycStatus.PENDING,
-                        reviewStatus: 'init',
-                    },
-                });
-
-                // Audit log
-                await this.prisma.auditLog.create({
-                    data: {
-                        userId,
-                        action: 'kyc_started',
-                        details: { applicantId: mockApplicantId },
-                    },
-                });
+            // Get user from DB
+            const user = await this.prisma.user.findUnique({ where: { id: userId } });
+            if (!user) {
+                throw new NotFoundException('User not found');
             }
 
+            // If user already has an applicantId, reuse it
+            if (user.kycApplicantId) {
+                this.logger.log(`User already has applicantId: ${user.kycApplicantId}, generating new SDK token`);
+
+                // Generate new SDK token for existing applicant
+                const { token: sdkAccessToken } = await this.sumsubService.getSdkAccessToken(
+                    userId,
+                    'basic-kyc-level',
+                );
+
+                return {
+                    applicantId: user.kycApplicantId,
+                    sdkAccessToken,
+                    status: user.kycStatus || KycStatus.NONE,
+                };
+            }
+
+            // Create new applicant in Sumsub
+            this.logger.log(`Creating new Sumsub applicant for user ${userId}`);
+            const { id: applicantId } = await this.sumsubService.createApplicant(userId);
+
+            // Save applicantId to user
+            await this.prisma.user.update({
+                where: { id: userId },
+                data: {
+                    kycApplicantId: applicantId,
+                    kycStatus: KycStatus.PENDING,
+                },
+            });
+
+            // Create KYC verification record
+            await this.prisma.kycVerification.create({
+                data: {
+                    userId,
+                    applicantId,
+                    status: KycStatus.PENDING,
+                    reviewStatus: 'init',
+                },
+            });
+
+            // Audit log
+            await this.prisma.auditLog.create({
+                data: {
+                    userId,
+                    action: 'KYC_STARTED',
+                    details: { applicantId },
+                },
+            });
+
+            // Generate SDK access token
+            const { token: sdkAccessToken } = await this.sumsubService.getSdkAccessToken(
+                userId,
+                'basic-kyc-level',
+            );
+
             this.metrics.kycSuccessTotal.inc({ status: 'started' });
-            this.logger.log(`KYC started successfully for user ${userId}, applicantId: ${mockApplicantId}`);
+            this.logger.log(`KYC started successfully for user ${userId}, applicantId: ${applicantId}`);
 
             return {
-                token: mockToken,
-                applicantId: mockApplicantId,
+                applicantId,
+                sdkAccessToken,
+                status: KycStatus.PENDING,
             };
-        } catch (error) {
+        } catch (error: any) {
             this.metrics.kycFailureTotal.inc({ reason: 'start_error' });
             this.logger.error(`Failed to start KYC for user ${userId}`, error.stack);
             throw error;
