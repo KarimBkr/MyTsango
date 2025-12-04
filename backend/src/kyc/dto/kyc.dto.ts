@@ -1,8 +1,15 @@
 import { KycStatus } from '@prisma/client';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class KycStartResponseDto {
-    token: string;
+    @ApiProperty({ example: 'sumsub-applicant-id-123' })
     applicantId: string;
+
+    @ApiProperty({ example: 'sumsub-sdk-token-abc123' })
+    sdkAccessToken: string;
+
+    @ApiProperty({ enum: KycStatus, example: KycStatus.PENDING })
+    status: KycStatus;
 }
 
 export class KycStatusResponseDto {
