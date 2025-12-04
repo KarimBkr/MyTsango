@@ -19,11 +19,10 @@ enum KycStatus {
 }
 
 // KYC Verification Model - Phase 1
-// Note: User model will be created by Jihad
-// In Phase 2, we'll add kycStatus and kycApplicantId to User model
+// Phase 2: Linked to User model with bidirectional relation
 model KycVerification {
   id            String    @id @default(uuid())
-  userId        String    // Foreign key to User (will be linked in Phase 2)
+  userId        String    // Foreign key to User
   applicantId   String?   @unique // Sumsub applicant ID
   status        KycStatus @default(NONE)
   
@@ -41,10 +40,38 @@ model KycVerification {
   // Idempotency for webhooks
   webhookEventId String?  @unique // To prevent duplicate webhook processing
   
+  // Relation to User (Phase 2) - Opposite side of the relation
+  user User? @relation
+  
   @@index([userId])
   @@index([status])
   @@map("kyc_verifications")
 }
+
+// User model for authentication
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  email          String    @unique
+  password       String    // bcrypt hashed
+  role           UserRole  @default(MEMBER)
+  kycStatus      KycStatus @default(NONE)
+  kycApplicantId String?   @unique  // Link to Sumsub applicant (1-to-1 with KycVerification)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  kycVerification KycVerification? @relation(fields: [kycApplicantId], references: [applicantId])
+
+  @@index([email])
+  @@map("users")
+}
+
+// User roles enum
+enum UserRole {
+  MEMBER      // Default role for new users
+  ORGANIZER   // Promoted after KYC approval
+  ADMIN       // System administrators
+}
+
 
 // Audit Log for KYC events - Phase 1
 model AuditLog {

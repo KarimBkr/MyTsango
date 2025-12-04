@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Query, Body, Headers, HttpCode, HttpStatus, BadRequestException } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery, ApiResponse, ApiHeader, ApiBody } from '@nestjs/swagger';
+import { Controller, Post, Get, Body, Headers, UseGuards, Request, HttpCode, HttpStatus } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiHeader, ApiBody } from '@nestjs/swagger';
 import { KycService } from './kyc.service';
 import { KycStartResponseDto, KycStatusResponseDto, SumsubWebhookDto } from './dto/kyc.dto';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @ApiTags('KYC')
 @Controller('kyc')
@@ -9,17 +10,17 @@ export class KycController {
     constructor(private readonly kycService: KycService) { }
 
     /**
-     * Phase 1: Start KYC verification (no JWT guard)
-     * Phase 2: Add @UseGuards(JwtAuthGuard) and get userId from req.user
+     * Phase 2: Start KYC verification (protected with JWT)
      */
+    @UseGuards(JwtAuthGuard)
     @Post('start')
+    @ApiBearerAuth()
     @ApiOperation({ 
         summary: 'Start KYC verification process',
-        description: 'Initiates a KYC verification for the authenticated user. Creates a Sumsub applicant and returns an SDK token for the mobile WebView. Phase 1: Uses userId query param. Phase 2: Will use JWT token from headers.'
+        description: 'Initiates a KYC verification for the authenticated user. Creates a Sumsub applicant and returns an SDK token for the mobile WebView. Requires JWT authentication.'
     })
-    @ApiQuery({ name: 'userId', description: 'User ID (temporary for Phase 1)', required: true, example: 'user-123' })
     @ApiResponse({ 
-        status: 200, 
+        status: 201, 
         description: 'KYC verification started successfully', 
         type: KycStartResponseDto,
         schema: {
@@ -29,25 +30,22 @@ export class KycController {
             }
         }
     })
-    @ApiResponse({ status: 400, description: 'Invalid request' })
-    @ApiResponse({ status: 401, description: 'Unauthorized (Phase 2)' })
-    async startKyc(@Query('userId') userId: string): Promise<KycStartResponseDto> {
-        if (!userId) {
-            throw new BadRequestException('userId is required');
-        }
+    @ApiResponse({ status: 401, description: 'Unauthorized - JWT required' })
+    async startKyc(@Request() req: any): Promise<KycStartResponseDto> {
+        const userId = req.user.id;
         return this.kycService.startKycVerification(userId);
     }
 
     /**
-     * Phase 1: Get KYC status (no JWT guard)
-     * Phase 2: Add @UseGuards(JwtAuthGuard) and get userId from req.user
+     * Phase 2: Get KYC status (protected with JWT)
      */
+    @UseGuards(JwtAuthGuard)
     @Get('status')
+    @ApiBearerAuth()
     @ApiOperation({ 
         summary: 'Get KYC verification status',
-        description: 'Retrieves the current KYC verification status for the authenticated user. Returns NONE if no KYC has been started. Phase 1: Uses userId query param. Phase 2: Will use JWT token from headers.'
+        description: 'Retrieves the current KYC verification status for the authenticated user. Returns NONE if no KYC has been started. Requires JWT authentication.'
     })
-    @ApiQuery({ name: 'userId', description: 'User ID (temporary for Phase 1)', required: true, example: 'user-123' })
     @ApiResponse({ 
         status: 200, 
         description: 'KYC status retrieved successfully', 
@@ -60,12 +58,9 @@ export class KycController {
             }
         }
     })
-    @ApiResponse({ status: 400, description: 'Invalid request' })
-    @ApiResponse({ status: 401, description: 'Unauthorized (Phase 2)' })
-    async getKycStatus(@Query('userId') userId: string): Promise<KycStatusResponseDto> {
-        if (!userId) {
-            throw new BadRequestException('userId is required');
-        }
+    @ApiResponse({ status: 401, description: 'Unauthorized - JWT required' })
+    async getKycStatus(@Request() req: any): Promise<KycStatusResponseDto> {
+        const userId = req.user.id;
         return this.kycService.getKycStatus(userId);
     }
 
