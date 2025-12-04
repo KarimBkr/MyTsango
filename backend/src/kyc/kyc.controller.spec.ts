@@ -28,24 +28,27 @@ describe('KycController', () => {
     });
 
     describe('startKyc', () => {
-        it('should call service and return token and applicantId', async () => {
-            const userId = 'test-user-123';
+        it('should call service and return SDK token and applicantId', async () => {
+            const mockUser = { id: 'test-user-123', email: 'test@test.com' };
+            const mockRequest = { user: mockUser };
             const mockResponse = {
-                token: 'mock-token-xyz',
+                sdkAccessToken: 'mock-token-xyz',
                 applicantId: 'mock-applicant-456',
+                status: KycStatus.PENDING,
             };
             mockKycService.startKycVerification.mockResolvedValue(mockResponse);
 
-            const result = await controller.startKyc(userId);
+            const result = await controller.startKyc(mockRequest);
 
-            expect(service.startKycVerification).toHaveBeenCalledWith(userId);
+            expect(service.startKycVerification).toHaveBeenCalledWith('test-user-123');
             expect(result).toEqual(mockResponse);
         });
     });
 
     describe('getKycStatus', () => {
         it('should call service and return KYC status', async () => {
-            const userId = 'test-user-123';
+            const mockUser = { id: 'test-user-123', email: 'test@test.com' };
+            const mockRequest = { user: mockUser };
             const mockStatus = {
                 status: KycStatus.APPROVED,
                 applicantId: 'applicant-123',
@@ -53,9 +56,9 @@ describe('KycController', () => {
             };
             mockKycService.getKycStatus.mockResolvedValue(mockStatus);
 
-            const result = await controller.getKycStatus(userId);
+            const result = await controller.getKycStatus(mockRequest);
 
-            expect(service.getKycStatus).toHaveBeenCalledWith(userId);
+            expect(service.getKycStatus).toHaveBeenCalledWith('test-user-123');
             expect(result).toEqual(mockStatus);
         });
     });

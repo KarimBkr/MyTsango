@@ -13,6 +13,7 @@ export interface KycStatusResponse {
 }
 
 export interface KycStartResponse {
-    token: string;
+    sdkAccessToken: string;
     applicantId: string;
+    status?: KycStatus;
 }

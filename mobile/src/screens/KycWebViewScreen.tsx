@@ -3,11 +3,12 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity, Alert } fr
 import { WebView } from 'react-native-webview';
 import { useNavigation } from '@react-navigation/native';
 import { useKyc } from '../hooks/useKyc';
+import { useAuth } from '../contexts/AuthContext';
 
 export const KycWebViewScreen: React.FC = () => {
     const navigation = useNavigation();
-    const userId = 'test-user-123'; // Phase 1: Hardcoded
-    const { startKycAsync, isStarting } = useKyc(userId);
+    const { user } = useAuth();
+    const { startKycAsync, isStarting } = useKyc();
 
     const [sdkToken, setSdkToken] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -19,8 +20,8 @@ export const KycWebViewScreen: React.FC = () => {
     const initializeKyc = async () => {
         try {
             const result = await startKycAsync();
-            setSdkToken(result.token);
-            console.log('KYC initialized with token:', result.token);
+            setSdkToken(result.sdkAccessToken);
+            console.log('KYC initialized with token:', result.sdkAccessToken);
         } catch (err) {
             console.error('Failed to initialize KYC:', err);
             setError('Impossible de démarrer la vérification. Veuillez réessayer.');
@@ -81,93 +82,66 @@ export const KycWebViewScreen: React.FC = () => {
         );
     }
 
-    // Phase 1: Display mock WebView content
-    // Phase 2: Load real Sumsub WebSDK
-    const mockHtml = `
+    // Load real Sumsub WebSDK
+    const sumsubHtml = `
     <!DOCTYPE html>
     <html>
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <script src="https://cdn.sumsub.com/idensic/latest/idensic.js"></script>
         <style>
           body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            padding: 20px;
-            background: #F9FAFB;
             margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
           }
-          .container {
-            background: white;
-            border-radius: 12px;
-            padding: 24px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-          }
-          h1 {
-            color: #111827;
-            font-size: 24px;
-            margin-bottom: 16px;
-          }
-          p {
-            color: #6B7280;
-            line-height: 1.6;
-            margin-bottom: 12px;
-          }
-          .token {
-            background: #F3F4F6;
-            padding: 12px;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 12px;
-            word-break: break-all;
-            margin: 16px 0;
-          }
-          .button {
-            background: #3B82F6;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
+          #sumsub-websdk-container {
             width: 100%;
-            margin-top: 16px;
-          }
-          .info {
-            background: #DBEAFE;
-            padding: 12px;
-            border-radius: 8px;
-            color: #1E40AF;
-            margin-top: 16px;
+            height: 100vh;
           }
         </style>
       </head>
       <body>
-        <div class="container">
-          <h1>🔐 Vérification d'identité (MOCK)</h1>
-          <p>Ceci est une interface de test pour la Phase 1.</p>
-          <p>En Phase 2, cette page chargera le vrai SDK Sumsub pour la vérification d'identité.</p>
-          
-          <div class="info">
-            <strong>Phase 1 - Mode Test</strong><br>
-            Token SDK reçu avec succès
-          </div>
-          
-          <div class="token">
-            Token: ${sdkToken}
-          </div>
-          
-          <button class="button" onclick="completeVerification()">
-            Simuler vérification réussie
-          </button>
-        </div>
-        
+        <div id="sumsub-websdk-container"></div>
         <script>
-          function completeVerification() {
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'success',
-              message: 'Verification completed'
-            }));
-          }
+          (function() {
+            try {
+              const snsWebSdkInstance = snsWebSdk.init('${sdkToken}')
+                .on('idCheck.onStepCompleted', function(payload) {
+                  console.log('Step completed:', payload);
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'stepCompleted',
+                    payload: payload
+                  }));
+                })
+                .on('idCheck.onApplicantSubmitted', function(payload) {
+                  console.log('Applicant submitted:', payload);
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'success',
+                    message: 'Verification submitted',
+                    payload: payload
+                  }));
+                })
+                .on('idCheck.onError', function(error) {
+                  console.error('Sumsub error:', error);
+                  window.ReactNativeWebView.postMessage(JSON.stringify({
+                    type: 'error',
+                    message: error.message || 'An error occurred',
+                    error: error
+                  }));
+                })
+                .on('idCheck.onViewerReady', function(viewer) {
+                  console.log('Viewer ready:', viewer);
+                })
+                .build();
+            } catch (error) {
+              console.error('Failed to initialize Sumsub SDK:', error);
+              window.ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'error',
+                message: 'Failed to initialize verification: ' + error.message
+              }));
+            }
+          })();
         </script>
       </body>
     </html>
@@ -176,11 +150,13 @@ export const KycWebViewScreen: React.FC = () => {
     return (
         <View style={styles.container}>
             <WebView
-                source={{ html: mockHtml }}
+                source={{ html: sumsubHtml }}
                 onMessage={handleWebViewMessage}
                 style={styles.webview}
                 javaScriptEnabled={true}
                 domStorageEnabled={true}
+                allowsInlineMediaPlayback={true}
+                mediaPlaybackRequiresUserAction={false}
             />
         </View>
     );

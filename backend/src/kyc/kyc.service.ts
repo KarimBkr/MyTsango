@@ -1,7 +1,9 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../prisma/prisma.service';
 import { MetricsService } from '../metrics/metrics.service';
 import { SumsubService } from './sumsub.service';
+import { HmacValidator } from './utils/hmac.util';
 import { KycStatus } from '@prisma/client';
 import { KycStartResponseDto, KycStatusResponseDto, SumsubWebhookDto } from './dto/kyc.dto';
 
@@ -13,6 +15,7 @@ export class KycService {
         private readonly prisma: PrismaService,
         private readonly metrics: MetricsService,
         private readonly sumsubService: SumsubService,
+        private readonly configService: ConfigService,
     ) { }
 
     /**
@@ -204,8 +207,20 @@ export class KycService {
             this.metrics.kycSuccessTotal.inc({ status: newStatus.toLowerCase() });
             this.logger.log(`KYC status updated to ${newStatus} for applicant ${payload.applicantId}`);
 
-            // Phase 2: Update user role to ORGANIZER if approved
-            // await this.updateUserRole(kycVerification.userId, newStatus);
+            // Update user role to ORGANIZER if approved
+            if (newStatus === KycStatus.APPROVED) {
+                await this.prisma.user.update({
+                    where: { id: kycVerification.userId },
+                    data: { role: 'ORGANIZER' },
+                });
+                this.logger.log(`User ${kycVerification.userId} promoted to ORGANIZER`);
+            }
+
+            // Update user kycStatus
+            await this.prisma.user.update({
+                where: { id: kycVerification.userId },
+                data: { kycStatus: newStatus },
+            });
 
         } catch (error) {
             this.metrics.kycFailureTotal.inc({ reason: 'webhook_error' });
@@ -218,22 +233,22 @@ export class KycService {
 
     /**
      * Validate webhook HMAC signature
-     * Phase 1: Basic validation (always returns true for testing)
-     * Phase 2: Real HMAC-SHA256 validation
+     * Uses HmacValidator for real HMAC-SHA256 validation
      */
     private validateWebhookSignature(payload: SumsubWebhookDto, signature: string): boolean {
-        // Phase 1: Mock validation
-        if (process.env.NODE_ENV === 'development') {
-            return true; // Accept all signatures in development
+        const secret = this.configService.get<string>('SUMSUB_WEBHOOK_SECRET');
+        
+        if (!secret) {
+            this.logger.warn('SUMSUB_WEBHOOK_SECRET not configured, skipping validation');
+            // Only allow in development if secret not configured
+            return process.env.NODE_ENV === 'development';
         }
 
-        // Phase 2: Real validation
-        // const secret = process.env.SUMSUB_WEBHOOK_SECRET;
-        // const hmac = crypto.createHmac('sha256', secret);
-        // hmac.update(JSON.stringify(payload));
-        // const expectedSignature = hmac.digest('hex');
-        // return signature === expectedSignature;
-
-        return true;
+        // Use HmacValidator for real validation
+        return HmacValidator.validateSumsubWebhook(
+            JSON.stringify(payload),
+            signature,
+            secret,
+        );
     }
 }

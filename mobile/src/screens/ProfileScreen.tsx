@@ -18,10 +18,7 @@ export const ProfileScreen: React.FC = () => {
     const navigation = useNavigation<ProfileScreenNavigationProp>();
     const { user, logout } = useAuth();
 
-    // Use authenticated user ID
-    const userId = user?.id || '';
-
-    const { kycStatus, isLoadingStatus, refetch } = useKyc(userId);
+    const { kycStatus, isLoadingStatus, refetch } = useKyc();
 
 
     const handleVerifyIdentity = () => {
