@@ -11,6 +11,12 @@ export class MetricsService {
     public readonly kycFailureTotal: Counter;
     public readonly kycDurationSeconds: Histogram;
 
+    // Payments Metrics (Sprint 2)
+    public readonly paymentsTotal: Counter;
+    public readonly paymentsSuccessTotal: Counter;
+    public readonly paymentsFailureTotal: Counter;
+    public readonly paymentsDurationSeconds: Histogram;
+
     constructor() {
         this.registry = register;
 
@@ -42,6 +48,39 @@ export class MetricsService {
         this.kycDurationSeconds = new Histogram({
             name: 'kyc_duration_seconds',
             help: 'Duration of KYC operations in seconds',
+            labelNames: ['operation'],
+            buckets: [0.1, 0.5, 1, 2, 5, 10],
+            registers: [this.registry],
+        });
+
+        // Counter: Total payment requests (Sprint 2)
+        this.paymentsTotal = new Counter({
+            name: 'payments_total',
+            help: 'Total number of payment requests',
+            labelNames: ['status'],
+            registers: [this.registry],
+        });
+
+        // Counter: Successful payments
+        this.paymentsSuccessTotal = new Counter({
+            name: 'payments_success_total',
+            help: 'Total number of successful payments',
+            labelNames: ['status'],
+            registers: [this.registry],
+        });
+
+        // Counter: Failed payments
+        this.paymentsFailureTotal = new Counter({
+            name: 'payments_failure_total',
+            help: 'Total number of failed payments',
+            labelNames: ['reason'],
+            registers: [this.registry],
+        });
+
+        // Histogram: Payment operation duration
+        this.paymentsDurationSeconds = new Histogram({
+            name: 'payments_duration_seconds',
+            help: 'Duration of payment operations in seconds',
             labelNames: ['operation'],
             buckets: [0.1, 0.5, 1, 2, 5, 10],
             registers: [this.registry],

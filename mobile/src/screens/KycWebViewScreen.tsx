@@ -116,8 +116,8 @@ export const KycWebViewScreen: React.FC = () => {
                 })
                 .on('idCheck.onApplicantSubmitted', function(payload) {
                   console.log('Applicant submitted:', payload);
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    type: 'success',
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'success',
                     message: 'Verification submitted',
                     payload: payload
                   }));
@@ -139,8 +139,8 @@ export const KycWebViewScreen: React.FC = () => {
               window.ReactNativeWebView.postMessage(JSON.stringify({
                 type: 'error',
                 message: 'Failed to initialize verification: ' + error.message
-              }));
-            }
+            }));
+          }
           })();
         </script>
       </body>
