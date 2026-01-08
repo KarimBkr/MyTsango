@@ -56,10 +56,12 @@ model User {
   role           UserRole  @default(MEMBER)
   kycStatus      KycStatus @default(NONE)
   kycApplicantId String?   @unique  // Link to Sumsub applicant (1-to-1 with KycVerification)
+  expoPushToken  String?   // Expo push notification token (Sprint 2)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   kycVerification KycVerification? @relation(fields: [kycApplicantId], references: [applicantId])
+  payments        Payment[]        // Sprint 2: User payments
 
   @@index([email])
   @@map("users")
@@ -87,4 +89,36 @@ model AuditLog {
   @@index([action])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// Payment Status Enum - Sprint 2
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  REFUNDED
+}
+
+// Payment Model - Sprint 2 (Loucman)
+// ⚠️ DÉPENDANCE JIHAD: Circle model doit exister avant de décommenter la relation
+// Pour l'instant, circleId est un String simple
+// Après migration Circle: décommenter la relation et ajouter Circle dans imports
+model Payment {
+  id                   String        @id @default(uuid()) @db.Uuid
+  circleId             String        // ⚠️ ATTENDRE: Circle model de Jihad
+  // circle               Circle        @relation(fields: [circleId], references: [id]) // À décommenter après Circle
+  userId               String        @db.Uuid
+  user                 User          @relation(fields: [userId], references: [id])
+  amount               Decimal       @db.Decimal(10, 2) // Montant en euros
+  status               PaymentStatus @default(PENDING)
+  stripePaymentIntentId String        @unique // Stripe PaymentIntent ID
+  receiptUrl           String?       // URL du reçu PDF (S3/MinIO)
+  createdAt            DateTime      @default(now())
+  confirmedAt          DateTime?
+  
+  @@index([circleId])
+  @@index([userId])
+  @@index([status])
+  @@index([stripePaymentIntentId])
+  @@map("payments")
 }

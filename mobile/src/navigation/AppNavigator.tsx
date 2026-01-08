@@ -6,11 +6,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { LoginScreen } from '../screens/LoginScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { KycWebViewScreen } from '../screens/KycWebViewScreen';
+import { PaymentScreen } from '../screens/PaymentScreen';
 
 export type RootStackParamList = {
     Login: undefined;
     Profile: undefined;
     KycWebView: undefined;
+    Payment: { circleId: string; amount?: number };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -33,26 +35,31 @@ export const AppNavigator: React.FC = () => {
                     <Stack.Screen name="Login" component={LoginScreen} />
                 </Stack.Navigator>
             ) : (
-                <Stack.Navigator
-                    initialRouteName="Profile"
-                    screenOptions={{
-                        headerStyle: {
-                            backgroundColor: '#3B82F6',
-                        },
-                        headerTintColor: '#FFFFFF',
-                    }}
-                >
-                    <Stack.Screen
-                        name="Profile"
-                        component={ProfileScreen}
-                        options={{ title: 'Mon Profil' }}
-                    />
-                    <Stack.Screen
-                        name="KycWebView"
-                        component={KycWebViewScreen}
+            <Stack.Navigator
+                initialRouteName="Profile"
+                screenOptions={{
+                    headerStyle: {
+                        backgroundColor: '#3B82F6',
+                    },
+                    headerTintColor: '#FFFFFF',
+                }}
+            >
+                <Stack.Screen
+                    name="Profile"
+                    component={ProfileScreen}
+                    options={{ title: 'Mon Profil' }}
+                />
+                <Stack.Screen
+                    name="KycWebView"
+                    component={KycWebViewScreen}
                         options={{ title: "Vérification d'identité" }}
                     />
-                </Stack.Navigator>
+                    <Stack.Screen
+                        name="Payment"
+                        component={PaymentScreen}
+                        options={{ title: 'Paiement' }}
+                />
+            </Stack.Navigator>
             )}
         </NavigationContainer>
     );
