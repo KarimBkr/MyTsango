@@ -60,8 +60,12 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  kycVerification KycVerification? @relation(fields: [kycApplicantId], references: [applicantId])
-  payments        Payment[]        // Sprint 2: User payments
+  // Relations
+  kycVerification  KycVerification? @relation(fields: [kycApplicantId], references: [applicantId])
+  payments         Payment[]        // Sprint 2: User payments
+  organizedCircles Circle[]         @relation("OrganizedCircles") // Circles user organizes
+  memberships      CircleMember[]   // Circle memberships
+  roundsToReceive  Round[]          @relation("RoundRecipient") // Rounds where user receives
 
   @@index([email])
   @@map("users")
@@ -91,6 +95,32 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+// ================== SPRINT 2: CIRCLES / TONTINES ==================
+
+// Circle Status Enum
+enum CircleStatus {
+  DRAFT       // En création, pas encore démarré
+  ACTIVE      // Démarré, tours en cours
+  COMPLETED   // Tous les tours terminés
+  CANCELLED   // Annulé par l'organisateur
+}
+
+// Round Status Enum
+enum RoundStatus {
+  PENDING     // Pas encore ouvert aux cotisations
+  OPEN        // Cotisations en cours
+  DISTRIBUTING // En distribution au récipient
+  COMPLETED   // Tour terminé
+}
+
+// Contribution Status Enum
+enum ContributionStatus {
+  DUE         // À payer
+  PAID        // Payé
+  LATE        // En retard
+  WAIVED      // Exempté (c'est le tour du membre)
+}
+
 // Payment Status Enum - Sprint 2
 enum PaymentStatus {
   PENDING
@@ -99,22 +129,109 @@ enum PaymentStatus {
   REFUNDED
 }
 
+// Cercle d'épargne (Tontine)
+model Circle {
+  id            String        @id @default(uuid()) @db.Uuid
+  name          String
+  description   String?
+  amount        Decimal       @db.Decimal(10, 2) // Cotisation par tour en EUR
+  frequency     String        // "weekly", "biweekly", "monthly"
+  maxMembers    Int           @default(10)
+  status        CircleStatus  @default(DRAFT)
+  organizerId   String        @db.Uuid
+  organizer     User          @relation("OrganizedCircles", fields: [organizerId], references: [id])
+  
+  startDate     DateTime?
+  endDate       DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  members       CircleMember[]
+  rounds        Round[]
+  payments      Payment[]
+
+  @@index([organizerId])
+  @@index([status])
+  @@map("circles")
+}
+
+// Membre d'un cercle
+model CircleMember {
+  id          String   @id @default(uuid()) @db.Uuid
+  circleId    String   @db.Uuid
+  circle      Circle   @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  userId      String   @db.Uuid
+  user        User     @relation(fields: [userId], references: [id])
+  position    Int      // Ordre dans le cercle (1, 2, 3... détermine le tour de réception)
+  role        String   @default("MEMBER") // "ORGANIZER" ou "MEMBER"
+  status      String   @default("ACTIVE") // "INVITED", "ACTIVE", "LEFT"
+  joinedAt    DateTime @default(now())
+
+  contributions Contribution[]
+
+  @@unique([circleId, userId])
+  @@unique([circleId, position])
+  @@index([userId])
+  @@map("circle_members")
+}
+
+// Tour de cotisation
+model Round {
+  id           String      @id @default(uuid()) @db.Uuid
+  circleId     String      @db.Uuid
+  circle       Circle      @relation(fields: [circleId], references: [id], onDelete: Cascade)
+  number       Int         // Tour 1, 2, 3...
+  recipientId  String      @db.Uuid // Membre qui reçoit la cagnotte ce tour
+  recipient    User        @relation("RoundRecipient", fields: [recipientId], references: [id])
+  status       RoundStatus @default(PENDING)
+  totalAmount  Decimal?    @db.Decimal(10, 2) // Montant total collecté
+  dueDate      DateTime    // Date limite de cotisation
+  completedAt  DateTime?
+  createdAt    DateTime    @default(now())
+
+  contributions Contribution[]
+
+  @@unique([circleId, number])
+  @@index([recipientId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("rounds")
+}
+
+// Contribution d'un membre à un tour
+model Contribution {
+  id         String             @id @default(uuid()) @db.Uuid
+  roundId    String             @db.Uuid
+  round      Round              @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  memberId   String             @db.Uuid
+  member     CircleMember       @relation(fields: [memberId], references: [id])
+  amount     Decimal            @db.Decimal(10, 2)
+  status     ContributionStatus @default(DUE)
+  paymentId  String?            @db.Uuid // Lié au Payment Stripe
+  paidAt     DateTime?
+  createdAt  DateTime           @default(now())
+
+  @@unique([roundId, memberId])
+  @@index([status])
+  @@index([paymentId])
+  @@map("contributions")
+}
+
 // Payment Model - Sprint 2 (Loucman)
-// ⚠️ DÉPENDANCE JIHAD: Circle model doit exister avant de décommenter la relation
-// Pour l'instant, circleId est un String simple
-// Après migration Circle: décommenter la relation et ajouter Circle dans imports
+// ✅ JIHAD: Circle model now exists, relation activated
 model Payment {
-  id                   String        @id @default(uuid()) @db.Uuid
-  circleId             String        // ⚠️ ATTENDRE: Circle model de Jihad
-  // circle               Circle        @relation(fields: [circleId], references: [id]) // À décommenter après Circle
-  userId               String        @db.Uuid
-  user                 User          @relation(fields: [userId], references: [id])
-  amount               Decimal       @db.Decimal(10, 2) // Montant en euros
-  status               PaymentStatus @default(PENDING)
+  id                    String        @id @default(uuid()) @db.Uuid
+  circleId              String        @db.Uuid
+  circle                Circle        @relation(fields: [circleId], references: [id])
+  userId                String        @db.Uuid
+  user                  User          @relation(fields: [userId], references: [id])
+  amount                Decimal       @db.Decimal(10, 2) // Montant en euros
+  status                PaymentStatus @default(PENDING)
   stripePaymentIntentId String        @unique // Stripe PaymentIntent ID
-  receiptUrl           String?       // URL du reçu PDF (S3/MinIO)
-  createdAt            DateTime      @default(now())
-  confirmedAt          DateTime?
+  receiptUrl            String?       // URL du reçu PDF (S3/MinIO)
+  createdAt             DateTime      @default(now())
+  confirmedAt           DateTime?
   
   @@index([circleId])
   @@index([userId])

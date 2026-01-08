@@ -9,13 +9,13 @@ export class StripeService {
 
     constructor(private readonly configService: ConfigService) {
         const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
-        
+
         if (!secretKey) {
             this.logger.warn('STRIPE_SECRET_KEY not configured, StripeService will not work');
         }
 
         this.stripe = new Stripe(secretKey || 'sk_test_placeholder', {
-            apiVersion: '2025-11-17.clover',
+            apiVersion: '2025-12-15.clover',
         });
     }
 

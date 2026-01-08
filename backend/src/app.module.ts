@@ -6,6 +6,7 @@ import { KycModule } from './kyc/kyc.module';
 import { AuthModule } from './auth/auth.module';
 import { PaymentsModule } from './payments/payments.module'; // Sprint 2
 import { NotificationsModule } from './notifications/notifications.module'; // Sprint 2
+import { CirclesModule } from './circles/circles.module'; // Sprint 2 - Jihad
 
 @Module({
     imports: [
@@ -19,6 +20,7 @@ import { NotificationsModule } from './notifications/notifications.module'; // S
         AuthModule,  // Phase 2: Authentication module
         PaymentsModule, // Sprint 2: Payments module
         NotificationsModule, // Sprint 2: Notifications module
+        CirclesModule, // Sprint 2: Circles/Tontines module - Jihad
     ],
 })
 export class AppModule { }
